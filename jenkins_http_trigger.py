@@ -44,6 +44,7 @@ class Const:
     cause = "cause"
     get_build_number = "get_build_number"
     get_build_status = "get_build_status"
+    get_full_console = "get_full_console"
     poll = "poll"
     poll_interval = "poll_interval"
     build_number = "build_number"
@@ -189,9 +190,20 @@ class JenkinsTrigger(object):
                     self.logger.info("%s: Building...", Const.check_status_key)                    
                 else:
                     self.logger.info("%s: %s", Const.check_status_key, result['result'])
+                    
+                    if kwds[Const.get_full_console]:
+                        try:
+                            consoleText = posixpath.join(self.host, "job", self.job, str(kwds[Const.build_number]), "consoleText")
+                            res = self.__get(consoleText, **kwds)
+                            res.raise_for_status()
+                            
+                            self.logger.info("\n%s", res.text)
+                            
+                        except Exception as e:
+                            self.logger.warning("fail to get console text: %s", e)
                     break
                 
-                if kwds[Const.poll]:
+                if kwds[Const.poll] or kwds[Const.get_full_console]:
                     sleep(interval)
                 else:
                     break
@@ -266,7 +278,7 @@ class JenkinsTrigger(object):
             if jobNumber == -1:
                 raise Exception("Something wrong with job number[{}] please check it!".format(jobNumber))
             
-            if kwds.get(Const.poll, False) or kwds[Const.get_build_status]:   
+            if kwds.get(Const.poll, False) or kwds[Const.get_build_status] or kwds[Const.get_full_console]:   
                 kwds[Const.build_number] = jobNumber
                 self.check(**kwds)
     
@@ -327,6 +339,7 @@ if __name__ == '__main__':
     buildParser.add_argument("-c", "--cause", dest=Const.cause, action="store", help="specify notes for remote build causes which will be shown on Jenkins ", default="")
     buildParser.add_argument("--get-build-number" , dest=Const.get_build_number, action="store_true", help="specify whether to show build number ", default=False)
     buildParser.add_argument("--get-build-status" , dest=Const.get_build_status, action="store_true", help="specify whether to show build status", default=False)
+    buildParser.add_argument("--get-full-console" , dest=Const.get_full_console, action="store_true", help="specify whether to show to full console text, set this flag will wait until the job finished", default=False)
     buildParser.add_argument("--poll" , dest=Const.poll, action="store_true", help="return until job is done", default=False)
     buildParser.add_argument("--poll-interval" , dest=Const.poll_interval, action="store", type=int,
                              help="polling interval in seconds while checking job status, at least 60", default=min_poll_interval)
@@ -334,7 +347,8 @@ if __name__ == '__main__':
     checkParser = subparsers.add_parser(Const.check, help="check job status.", formatter_class=ArgumentDefaultsHelpFormatter)
     checkParser.add_argument("--poll" , dest=Const.poll, action="store_true", help="return until job is done", default=False)
     checkParser.add_argument("--poll-interval" , dest=Const.poll_interval, action="store", type=int,
-                             help="polling interval in seconds while checking job status, at least 60", default=min_poll_interval)   
+                             help="polling interval in seconds while checking job status, at least 60", default=min_poll_interval)
+    checkParser.add_argument("--get-full-console" , dest=Const.get_full_console, action="store_true", help="specify whether to show to full console text, set this flag will wait until the job finished", default=False)   
     checkParser.add_argument(Const.build_number, action="store", help="specify the build number to be checked. ", default=False)
     
     stopParser = subparsers.add_parser(Const.stop, help="safely stop remote jobs.", formatter_class=ArgumentDefaultsHelpFormatter)   
