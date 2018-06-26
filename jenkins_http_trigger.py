@@ -151,9 +151,19 @@ class JenkinsTrigger(object):
         login = posixpath.join(self.host, "j_acegi_security_check")        
         self.logger.info("login from: [%s]... ", socket.gethostname())
         
-        res = self.session.post(login, data={'j_password':  self.pwd, 'j_username': self.user},
-                                timeout=kwds.get(Const.request_timeout, Const.default_timeout))
-        res.raise_for_status()
+        rty = 0
+        while True:
+            try:
+                res = self.session.post(login, data={'j_password':  self.pwd, 'j_username': self.user},
+                                        timeout=kwds.get(Const.request_timeout, Const.default_timeout))
+                res.raise_for_status()
+                break
+            except requests.exceptions.RequestException as e:
+                if rty >= kwds[Const.retry_count]:
+                    raise e
+                rty += 1
+                self.logger.exception("fail to login, retry[%s]...", rty)
+                sleep(rty * 5)
         
         with open(self.cookieFile, 'w') as f:
             pickle.dump(requests.utils.dict_from_cookiejar(self.session.cookies), f)
@@ -214,7 +224,7 @@ class JenkinsTrigger(object):
                     raise e
                 self.logger.exception("unknown connection error, session timeout, etc")
                 self.logger.info("try to reconnect...")
-                self.__login()
+                self.__login(**kwds)
 
     def build(self, **kwds):
         
